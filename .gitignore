@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Virtual environment
+.venv/
+venv/
+
+# Build artifacts
+build/
+dist/
+
+# Test outputs
+output/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+
+# Claude Code
+.claude/
+
+# Dev / test scripts
+dev/
+
+# OS
+Thumbs.db
+.DS_Store

@@ -1,0 +1,7 @@
+phonemes: phonemes.txt
+linguistic: linguistic.onnx
+dur: dur.onnx
+hop_size: 800
+sample_rate: 40000
+predict_dur: true
+use_lang_id: false

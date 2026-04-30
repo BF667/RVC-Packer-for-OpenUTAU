@@ -1,0 +1,174 @@
+entries:
+  - {grapheme: "a", phonemes: [a]}
+  - {grapheme: "i", phonemes: [i]}
+  - {grapheme: "u", phonemes: [ɯ]}
+  - {grapheme: "e", phonemes: [e]}
+  - {grapheme: "o", phonemes: [o]}
+  - {grapheme: "ka", phonemes: [k, a]}
+  - {grapheme: "ki", phonemes: [k, i]}
+  - {grapheme: "ku", phonemes: [k, ɯ]}
+  - {grapheme: "ke", phonemes: [k, e]}
+  - {grapheme: "ko", phonemes: [k, o]}
+  - {grapheme: "sa", phonemes: [s, a]}
+  - {grapheme: "shi", phonemes: [ɕ, i]}
+  - {grapheme: "su", phonemes: [s, ɯ]}
+  - {grapheme: "se", phonemes: [s, e]}
+  - {grapheme: "so", phonemes: [s, o]}
+  - {grapheme: "si", phonemes: [ɕ, i]}
+  - {grapheme: "ta", phonemes: [t, a]}
+  - {grapheme: "chi", phonemes: [tɕ, i]}
+  - {grapheme: "tsu", phonemes: [ts, ɯ]}
+  - {grapheme: "te", phonemes: [t, e]}
+  - {grapheme: "to", phonemes: [t, o]}
+  - {grapheme: "ti", phonemes: [tɕ, i]}
+  - {grapheme: "tu", phonemes: [ts, ɯ]}
+  - {grapheme: "na", phonemes: [n, a]}
+  - {grapheme: "ni", phonemes: [ɲ, i]}
+  - {grapheme: "nu", phonemes: [n, ɯ]}
+  - {grapheme: "ne", phonemes: [n, e]}
+  - {grapheme: "no", phonemes: [n, o]}
+  - {grapheme: "ha", phonemes: [h, a]}
+  - {grapheme: "hi", phonemes: [ç, i]}
+  - {grapheme: "fu", phonemes: [ɸ, ɯ]}
+  - {grapheme: "he", phonemes: [h, e]}
+  - {grapheme: "ho", phonemes: [h, o]}
+  - {grapheme: "hu", phonemes: [ɸ, ɯ]}
+  - {grapheme: "ma", phonemes: [m, a]}
+  - {grapheme: "mi", phonemes: [m, i]}
+  - {grapheme: "mu", phonemes: [m, ɯ]}
+  - {grapheme: "me", phonemes: [m, e]}
+  - {grapheme: "mo", phonemes: [m, o]}
+  - {grapheme: "ya", phonemes: [j, a]}
+  - {grapheme: "yu", phonemes: [j, ɯ]}
+  - {grapheme: "yo", phonemes: [j, o]}
+  - {grapheme: "ra", phonemes: [ɾ, a]}
+  - {grapheme: "ri", phonemes: [ɾ, i]}
+  - {grapheme: "ru", phonemes: [ɾ, ɯ]}
+  - {grapheme: "re", phonemes: [ɾ, e]}
+  - {grapheme: "ro", phonemes: [ɾ, o]}
+  - {grapheme: "wa", phonemes: [w, a]}
+  - {grapheme: "wo", phonemes: [o]}
+  - {grapheme: "n", phonemes: [ɴ]}
+  - {grapheme: "nn", phonemes: [ɴ]}
+  - {grapheme: "ga", phonemes: [g, a]}
+  - {grapheme: "gi", phonemes: [g, i]}
+  - {grapheme: "gu", phonemes: [g, ɯ]}
+  - {grapheme: "ge", phonemes: [g, e]}
+  - {grapheme: "go", phonemes: [g, o]}
+  - {grapheme: "za", phonemes: [z, a]}
+  - {grapheme: "ji", phonemes: [dʑ, i]}
+  - {grapheme: "zu", phonemes: [z, ɯ]}
+  - {grapheme: "ze", phonemes: [z, e]}
+  - {grapheme: "zo", phonemes: [z, o]}
+  - {grapheme: "zi", phonemes: [dʑ, i]}
+  - {grapheme: "da", phonemes: [d, a]}
+  - {grapheme: "di", phonemes: [dʑ, i]}
+  - {grapheme: "du", phonemes: [z, ɯ]}
+  - {grapheme: "de", phonemes: [d, e]}
+  - {grapheme: "do", phonemes: [d, o]}
+  - {grapheme: "ba", phonemes: [b, a]}
+  - {grapheme: "bi", phonemes: [b, i]}
+  - {grapheme: "bu", phonemes: [b, ɯ]}
+  - {grapheme: "be", phonemes: [b, e]}
+  - {grapheme: "bo", phonemes: [b, o]}
+  - {grapheme: "pa", phonemes: [p, a]}
+  - {grapheme: "pi", phonemes: [p, i]}
+  - {grapheme: "pu", phonemes: [p, ɯ]}
+  - {grapheme: "pe", phonemes: [p, e]}
+  - {grapheme: "po", phonemes: [p, o]}
+  - {grapheme: "kya", phonemes: [k, j, a]}
+  - {grapheme: "kyu", phonemes: [k, j, ɯ]}
+  - {grapheme: "kyo", phonemes: [k, j, o]}
+  - {grapheme: "sha", phonemes: [ɕ, a]}
+  - {grapheme: "shu", phonemes: [ɕ, ɯ]}
+  - {grapheme: "sho", phonemes: [ɕ, o]}
+  - {grapheme: "cha", phonemes: [tɕ, a]}
+  - {grapheme: "chu", phonemes: [tɕ, ɯ]}
+  - {grapheme: "cho", phonemes: [tɕ, o]}
+  - {grapheme: "nya", phonemes: [ɲ, a]}
+  - {grapheme: "nyu", phonemes: [ɲ, ɯ]}
+  - {grapheme: "nyo", phonemes: [ɲ, o]}
+  - {grapheme: "hya", phonemes: [ç, a]}
+  - {grapheme: "hyu", phonemes: [ç, ɯ]}
+  - {grapheme: "hyo", phonemes: [ç, o]}
+  - {grapheme: "mya", phonemes: [m, j, a]}
+  - {grapheme: "myu", phonemes: [m, j, ɯ]}
+  - {grapheme: "myo", phonemes: [m, j, o]}
+  - {grapheme: "rya", phonemes: [ɾ, j, a]}
+  - {grapheme: "ryu", phonemes: [ɾ, j, ɯ]}
+  - {grapheme: "ryo", phonemes: [ɾ, j, o]}
+  - {grapheme: "gya", phonemes: [g, j, a]}
+  - {grapheme: "gyu", phonemes: [g, j, ɯ]}
+  - {grapheme: "gyo", phonemes: [g, j, o]}
+  - {grapheme: "ja", phonemes: [dʑ, a]}
+  - {grapheme: "ju", phonemes: [dʑ, ɯ]}
+  - {grapheme: "jo", phonemes: [dʑ, o]}
+  - {grapheme: "bya", phonemes: [b, j, a]}
+  - {grapheme: "byu", phonemes: [b, j, ɯ]}
+  - {grapheme: "byo", phonemes: [b, j, o]}
+  - {grapheme: "pya", phonemes: [p, j, a]}
+  - {grapheme: "pyu", phonemes: [p, j, ɯ]}
+  - {grapheme: "pyo", phonemes: [p, j, o]}
+  - {grapheme: "cl", phonemes: [ʔ]}
+  - {grapheme: "q", phonemes: [ʔ]}
+  - {grapheme: "fa", phonemes: [ɸ, a]}
+  - {grapheme: "fi", phonemes: [ɸ, i]}
+  - {grapheme: "fe", phonemes: [ɸ, e]}
+  - {grapheme: "fo", phonemes: [ɸ, o]}
+  - {grapheme: "va", phonemes: [b, a]}
+  - {grapheme: "vi", phonemes: [b, i]}
+  - {grapheme: "ve", phonemes: [b, e]}
+  - {grapheme: "vo", phonemes: [b, o]}
+  - {grapheme: "vu", phonemes: [b, ɯ]}
+  - {grapheme: "li", phonemes: [ɾ, i]}
+  - {grapheme: "la", phonemes: [ɾ, a]}
+  - {grapheme: "lu", phonemes: [ɾ, ɯ]}
+  - {grapheme: "le", phonemes: [ɾ, e]}
+  - {grapheme: "lo", phonemes: [ɾ, o]}
+  - {grapheme: "wi", phonemes: [w, i]}
+  - {grapheme: "we", phonemes: [w, e]}
+  - {grapheme: "ye", phonemes: [j, e]}
+  - {grapheme: "sh", phonemes: [ɕ]}
+  - {grapheme: "a_hh", phonemes: [a]}
+  - {grapheme: "e_hh", phonemes: [e]}
+  - {grapheme: "u_hh", phonemes: [ɯ]}
+  - {grapheme: "i_hh", phonemes: [i]}
+  - {grapheme: "o_hh", phonemes: [o]}
+  - {grapheme: "u -", phonemes: [ɯ]}
+  - {grapheme: "え'", phonemes: [e]}
+  - {grapheme: "SP", phonemes: [SP]}
+  - {grapheme: "AP", phonemes: [AP]}
+  - {grapheme: "br", phonemes: [br]}
+
+symbols:
+  - {symbol: "AP", type: vowel}
+  - {symbol: "SP", type: vowel}
+  - {symbol: "a", type: vowel}
+  - {symbol: "b", type: consonant}
+  - {symbol: "br", type: vowel}
+  - {symbol: "d", type: consonant}
+  - {symbol: "dʑ", type: consonant}
+  - {symbol: "e", type: vowel}
+  - {symbol: "g", type: consonant}
+  - {symbol: "h", type: consonant}
+  - {symbol: "i", type: vowel}
+  - {symbol: "j", type: consonant}
+  - {symbol: "k", type: consonant}
+  - {symbol: "m", type: consonant}
+  - {symbol: "n", type: consonant}
+  - {symbol: "o", type: vowel}
+  - {symbol: "p", type: consonant}
+  - {symbol: "s", type: consonant}
+  - {symbol: "t", type: consonant}
+  - {symbol: "ts", type: consonant}
+  - {symbol: "tɕ", type: consonant}
+  - {symbol: "w", type: consonant}
+  - {symbol: "z", type: consonant}
+  - {symbol: "ç", type: consonant}
+  - {symbol: "ɕ", type: consonant}
+  - {symbol: "ɯ", type: vowel}
+  - {symbol: "ɲ", type: consonant}
+  - {symbol: "ɴ", type: consonant}
+  - {symbol: "ɸ", type: consonant}
+  - {symbol: "ɾ", type: consonant}
+  - {symbol: "ʔ", type: consonant}
