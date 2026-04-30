@@ -14,6 +14,7 @@ Usage:
   python export_rvc.py --model <rvc.pth> --output vocoder.onnx [--index <.index>] [--index-rate 0.75]
 """
 
+import os
 import sys
 import argparse
 import math
@@ -231,7 +232,7 @@ def _load_config_json(model_path: str):
 
 def load_rvc_model(model_path: str, device: str = "cpu"):
     """Load RVC model and return (net_g_onnx, config_dict)."""
-    rvc_root = Path("D:/MyDev/MSSTRVC/RVC/RVC20240604Nvidia")
+    rvc_root = Path(os.environ.get("RVC_ROOT", "RVC"))
     sys.path.insert(0, str(rvc_root))
     sys.path.insert(0, str(rvc_root / "infer" / "lib"))
 

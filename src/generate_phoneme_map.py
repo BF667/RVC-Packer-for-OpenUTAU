@@ -6,6 +6,7 @@ Outputs:
   phoneme_map/dsdict-ja.yaml — Japanese lyrics → IPA phoneme dictionary
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -19,7 +20,7 @@ if "yaml" not in sys.modules:
     sys.modules["yaml"] = _ym
 
 import importlib.util
-_PV1_PATH = Path("D:/MyDev/MSSTRVC/score2hubert_v2/src/data/phoneme_v1.py")
+_PV1_PATH = Path(os.environ.get("S2H_ROOT", "score2hubert_v2")) / "src" / "data" / "phoneme_v1.py"
 _spec = importlib.util.spec_from_file_location("phoneme_v1", _PV1_PATH)
 _pv1 = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_pv1)

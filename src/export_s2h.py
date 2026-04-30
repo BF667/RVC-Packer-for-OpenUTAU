@@ -13,6 +13,7 @@ Usage:
   python export_s2h.py --checkpoint <best.pt> --config <train.yaml> --output acoustic.onnx
 """
 
+import os
 import sys
 import argparse
 import math
@@ -250,7 +251,7 @@ def load_s2h_model(ckpt_path: str, config_path: str, device: str = "cpu"):
     import yaml
 
     s2h_root = Path(__file__).resolve().parents[1]
-    project_root = Path("D:/MyDev/MSSTRVC/score2hubert_v2")
+    project_root = Path(os.environ.get("S2H_ROOT", "score2hubert_v2"))
     sys.path.insert(0, str(project_root / "src"))
 
     from model.score2hubert import Score2HuBERT
@@ -316,9 +317,9 @@ def export_onnx(s2h_model, output_path: str, opset: int = 17):
 def main():
     parser = argparse.ArgumentParser(description="Export S2H -> acoustic.onnx")
     parser.add_argument("--checkpoint", type=str,
-                        default="D:/MyDev/MSSTRVC/score2hubert_v2/archive/run9_final/best.pt")
+                        required=True)
     parser.add_argument("--config", type=str,
-                        default="D:/MyDev/MSSTRVC/score2hubert_v2/archive/run9_final/train.yaml")
+                        required=True)
     parser.add_argument("--output", type=str, default="output/acoustic.onnx")
     parser.add_argument("--opset", type=int, default=17)
     args = parser.parse_args()
