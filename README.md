@@ -48,9 +48,32 @@ Download `RVC_VoiceBank_Packer.exe` from [Releases](#). No Python or PyTorch req
 
 The GUI supports three languages (English / 日本語 / 中文).
 
-## Developer Usage
+## Run from Source
 
-Requires Python 3.10+, PyTorch 2.x, numpy, onnx. See [Requirements](#requirements) for details.
+```bash
+git clone https://github.com/SaigyoYuyuko/RVC-Packer-for-OpenUTAU.git
+cd RVC-Packer-for-OpenUTAU
+git lfs pull            # fetch ONNX models (~700 MB)
+python -m venv .venv
+.venv/Scripts/activate  # Windows
+pip install numpy onnx  # faiss-cpu optional, for .index file support
+python src/packer_gui.py
+```
+
+### Build standalone exe
+
+```bash
+pip install pyinstaller
+pyinstaller packer.spec
+```
+
+Produces `dist/RVC_VoiceBank_Packer/RVC_VoiceBank_Packer.exe`. Bundles numpy + onnx + tkinter; excludes PyTorch, scipy, and CUDA.
+
+## Re-export Models (Developer Only)
+
+> The export scripts contain hardcoded paths to the S2H training code and RVC source tree. They are intended for the original developer to regenerate `assets/`. End users do not need to run these — the pre-exported ONNX models are included in the repo via Git LFS.
+
+Requires additionally: PyTorch 2.x, pyyaml, and the S2H / RVC source trees locally.
 
 ### Export S2H acoustic model (one-time)
 
@@ -91,18 +114,10 @@ python src/generate_phoneme_map.py
 
 Generates `phonemes.txt`, `dsdict-ja.yaml`, and `dsdict-zh.yaml` from the S2H IPA vocabulary.
 
-### Build standalone packer (PyInstaller)
-
-```bash
-pyinstaller packer.spec
-```
-
-Produces `dist/RVC_VoiceBank_Packer/RVC_VoiceBank_Packer.exe`. Bundles numpy + onnx + tkinter; excludes PyTorch, scipy, and CUDA.
-
 ## Project Structure
 
 ```
-S2H_OpenUtau_Adapter/
+RVC-Packer-for-OpenUTAU/
 ├── src/
 │   ├── export_s2h.py           # S2H → acoustic.onnx (DiffSinger acoustic)
 │   ├── export_rvc.py           # RVC → model.onnx (DiffSinger vocoder)
@@ -113,21 +128,22 @@ S2H_OpenUtau_Adapter/
 │   ├── generate_phoneme_map.py # IPA phoneme map generator
 │   └── packer_gui.py           # Tkinter GUI (EN/JA/ZH)
 ├── assets/
-│   ├── acoustic.onnx           # Pre-exported S2H acoustic (shared)
+│   ├── acoustic.onnx           # Pre-exported S2H acoustic (shared, Git LFS)
 │   ├── dsdur/                  # Duration model for DiffSinger phonemizer
 │   │   ├── dsconfig.yaml       # Phonemizer config (40000 Hz / hop 800)
 │   │   ├── dur.onnx            # Duration predictor
 │   │   └── linguistic.onnx     # Linguistic encoder
 │   └── templates/
-│       ├── v2_40k.onnx + .json # RVC v2 40 kHz template + weight map
-│       └── v2_48k.onnx + .json # RVC v2 48 kHz template + weight map
+│       ├── v2_40k.onnx + .json # RVC v2 40 kHz template + weight map (Git LFS)
+│       └── v2_48k.onnx + .json # RVC v2 48 kHz template + weight map (Git LFS)
 ├── phoneme_map/
 │   ├── phonemes.txt            # IPA token list (line number = token ID)
 │   ├── dsdict-ja.yaml          # Japanese romaji → IPA
 │   └── dsdict-zh.yaml          # Chinese pinyin → IPA
-├── packer.spec                 # PyInstaller build config
-└── dist/                       # Built executable
+└── packer.spec                 # PyInstaller build config
 ```
+
+> `dist/` (build output) and `output/` (test artifacts) are gitignored. Clone the repo with `git lfs pull` to fetch the ONNX model files.
 
 ## Technical Details
 
@@ -165,9 +181,10 @@ RVC's relative attention uses `.view()` with runtime-computed sizes that get bak
 | Component | Dependencies |
 |-----------|-------------|
 | **GUI Packer (exe)** | None — self-contained |
-| **ONNX export scripts** | Python 3.10+, PyTorch 2.x, numpy, onnx, pyyaml |
+| **Run from source** | Python 3.10+, numpy, onnx |
 | **Index support** | faiss-cpu (optional, for `.index` files) |
 | **Building the exe** | pyinstaller |
+| **Re-export models** | PyTorch 2.x, pyyaml, S2H/RVC source trees locally |
 | **OpenUtau runtime** | OpenUtau with DiffSinger renderer (ONNX Runtime bundled) |
 
 ## Supported Models
