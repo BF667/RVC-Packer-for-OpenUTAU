@@ -19,10 +19,10 @@ import numpy as np
 
 try:
     from .pth_reader import load_pth
-    from .onnx_patcher import process_state_dict, patch_onnx_template
+    from .onnx_patcher import process_state_dict, patch_onnx_template, patch_f0_silence_mask
 except ImportError:
     from pth_reader import load_pth
-    from onnx_patcher import process_state_dict, patch_onnx_template
+    from onnx_patcher import process_state_dict, patch_onnx_template, patch_f0_silence_mask
 
 import sys as _sys
 if getattr(_sys, 'frozen', False):
@@ -193,6 +193,10 @@ def pack_voicebank(
             from onnx_patcher import bake_index_into_onnx
         bake_index_into_onnx(str(vocoder_onnx), index_npy_path,
                               index_rate, str(vocoder_onnx))
+
+    # 4b. Inject F0 silence mask into vocoder graph
+    log("Injecting F0 silence mask...")
+    patch_f0_silence_mask(str(vocoder_onnx))
 
     # 5. Write vocoder config
     _write_vocoder_yaml(vocoder_onnx.parent, sr)

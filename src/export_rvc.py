@@ -155,6 +155,11 @@ class FixedLenVocoder(nn.Module):
         self.resample_ratio = self.OPENUTAU_SR / model_sr
 
     def forward(self, mel, f0):
+        # Zero F0 for silent frames (SP padding from acoustic model outputs
+        # all-zero HuBERT; without this, NSF generates a voiced "ah" artifact)
+        silent = (mel.pow(2).sum(dim=-1) < 1e-6).float()
+        f0 = f0 * (1.0 - silent)
+
         mel = self.voc._index_retrieve(mel)
 
         feat = mel.transpose(1, 2)

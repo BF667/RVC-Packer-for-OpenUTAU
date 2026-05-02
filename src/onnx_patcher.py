@@ -195,3 +195,90 @@ def bake_index_into_onnx(model_path: str, npy_path: str, index_rate: float,
 
     onnx.save(model, output_path)
     print(f"  Baked index ({big_npy.shape[0]} vectors, rate={index_rate})")
+
+
+def patch_f0_silence_mask(model_path: str, output_path: Optional[str] = None):
+    """Insert SP silence handling into vocoder ONNX graph.
+
+    Two layers of protection for SP (silence padding) frames:
+    1. Zero F0 — prevents NSF harmonic generation
+    2. Zero waveform output — catches residual noise from index retrieval
+       leaking non-zero HuBERT into enc_p even when F0 is zero
+    """
+    if onnx is None:
+        raise ImportError("onnx package required")
+    from onnx import helper, TensorProto
+
+    if output_path is None:
+        output_path = model_path
+
+    model = onnx.load(model_path)
+    graph = model.graph
+
+    if any(n.output[0] == "_sp_f0_masked" for n in graph.node):
+        print("  SP silence mask already present, skipping")
+        return
+
+    for name, val in [
+        ("_sp_pow2",  np.array(2.0, dtype=np.float32)),
+        ("_sp_eps",   np.array(1e-6, dtype=np.float32)),
+        ("_sp_one",   np.array(1.0, dtype=np.float32)),
+        ("_sp_axes",  np.array([-1], dtype=np.int64)),
+        ("_sp_ax1",   np.array([1], dtype=np.int64)),
+        ("_sp_idx1",  np.array(1, dtype=np.int64)),
+        ("_sp_sh1",   np.array([1], dtype=np.int64)),
+        ("_sp_p11",   np.array([1, 1], dtype=np.int64)),
+        ("_sp_roi",   np.array([], dtype=np.float32)),
+        ("_sp_sc",    np.array([], dtype=np.float32)),
+    ]:
+        graph.initializer.append(numpy_helper.from_array(val, name=name))
+
+    # -- Layer 1: F0 masking --
+    f0_nodes = [
+        helper.make_node("Pow", ["mel", "_sp_pow2"], ["_sp_mel_sq"]),
+        helper.make_node("ReduceSum", ["_sp_mel_sq", "_sp_axes"],
+                         ["_sp_mel_energy"], keepdims=0),
+        helper.make_node("Less", ["_sp_mel_energy", "_sp_eps"],
+                         ["_sp_is_silent"]),
+        helper.make_node("Cast", ["_sp_is_silent"], ["_sp_silent_f"],
+                         to=TensorProto.FLOAT),
+        helper.make_node("Sub", ["_sp_one", "_sp_silent_f"],
+                         ["_sp_voiced"]),
+        helper.make_node("Mul", ["f0", "_sp_voiced"], ["_sp_f0_masked"]),
+    ]
+
+    for node in graph.node:
+        for i, inp in enumerate(node.input):
+            if inp == "f0":
+                node.input[i] = "_sp_f0_masked"
+
+    for i, node in enumerate(f0_nodes):
+        graph.node.insert(i, node)
+
+    # -- Layer 2: waveform output masking --
+    # Rename current "waveform" producer → "_sp_wav_raw"
+    for node in graph.node:
+        for i, out in enumerate(node.output):
+            if out == "waveform":
+                node.output[i] = "_sp_wav_raw"
+
+    # Upsample _sp_voiced [1,T] → [1,T_audio] via nearest resize, then mul
+    audio_nodes = [
+        helper.make_node("Unsqueeze", ["_sp_voiced", "_sp_ax1"],
+                         ["_sp_v3d"]),
+        helper.make_node("Shape", ["_sp_wav_raw"], ["_sp_ws"]),
+        helper.make_node("Gather", ["_sp_ws", "_sp_idx1"], ["_sp_ta"]),
+        helper.make_node("Reshape", ["_sp_ta", "_sp_sh1"], ["_sp_ta1"]),
+        helper.make_node("Concat", ["_sp_p11", "_sp_ta1"], ["_sp_rsz"],
+                         axis=0),
+        helper.make_node("Resize",
+                         ["_sp_v3d", "_sp_roi", "_sp_sc", "_sp_rsz"],
+                         ["_sp_va3"], mode="nearest"),
+        helper.make_node("Squeeze", ["_sp_va3", "_sp_ax1"], ["_sp_va"]),
+        helper.make_node("Mul", ["_sp_wav_raw", "_sp_va"], ["waveform"]),
+    ]
+
+    graph.node.extend(audio_nodes)
+
+    onnx.save(model, output_path)
+    print("  SP silence mask injected (F0 + waveform output)")

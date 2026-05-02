@@ -28,9 +28,9 @@ _STRINGS = {
         "zh": "RVC 声库打包工具 for OpenUtau",
     },
     "title_bar": {
-        "en": "  RVC Voice Bank Packer  v1.0",
-        "ja": "  RVC ボイスバンク パッカー  v1.0",
-        "zh": "  RVC 声库打包工具  v1.0",
+        "en": "  RVC Voice Bank Packer  v1.1",
+        "ja": "  RVC ボイスバンク パッカー  v1.1",
+        "zh": "  RVC 声库打包工具  v1.1",
     },
     "sec_voice": {
         "en": " Voice Info ",
@@ -164,17 +164,17 @@ _STRINGS = {
     },
 }
 
-# ── Color scheme: classic Windows 98/2000 ──────────────────────────────────
-BG          = "#c0c0c0"
-BG_LIGHT    = "#dfdfdf"
-FG          = "#000000"
-FG_DIM      = "#404040"
+# ── Color scheme: teal/steel-blue (matched to feather.ico #5f7b86) ────────
+BG          = "#e4ecef"
+BG_LIGHT    = "#f0f5f7"
+FG          = "#1e3640"
+FG_DIM      = "#5f7b86"
 ENTRY_BG    = "#ffffff"
-BTN_BG      = "#c0c0c0"
-BTN_ACTIVE  = "#d4d0c8"
-ACCENT      = "#000080"
-STATUS_BG   = "#c0c0c0"
-TITLE_BG    = "#000080"
+BTN_BG      = "#c8d5da"
+BTN_ACTIVE  = "#b0c2c9"
+ACCENT      = "#3a5561"
+STATUS_BG   = "#e4ecef"
+TITLE_BG    = "#3a5561"
 TITLE_FG    = "#ffffff"
 
 FONT_LABEL   = ("MS Gothic", 9)

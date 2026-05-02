@@ -129,6 +129,33 @@ entries:
   - {grapheme: "we", phonemes: [w, e]}
   - {grapheme: "ye", phonemes: [j, e]}
   - {grapheme: "sh", phonemes: [ɕ]}
+  - {grapheme: "she", phonemes: [ɕ, e]}
+  - {grapheme: "che", phonemes: [tɕ, e]}
+  - {grapheme: "je", phonemes: [dʑ, e]}
+  - {grapheme: "tsa", phonemes: [ts, a]}
+  - {grapheme: "tsi", phonemes: [ts, i]}
+  - {grapheme: "tse", phonemes: [ts, e]}
+  - {grapheme: "tso", phonemes: [ts, o]}
+  - {grapheme: "kye", phonemes: [k, j, e]}
+  - {grapheme: "nye", phonemes: [ɲ, e]}
+  - {grapheme: "hye", phonemes: [ç, e]}
+  - {grapheme: "mye", phonemes: [m, j, e]}
+  - {grapheme: "rye", phonemes: [ɾ, j, e]}
+  - {grapheme: "gye", phonemes: [g, j, e]}
+  - {grapheme: "bye", phonemes: [b, j, e]}
+  - {grapheme: "pye", phonemes: [p, j, e]}
+  - {grapheme: "kwa", phonemes: [k, w, a]}
+  - {grapheme: "kwi", phonemes: [k, w, i]}
+  - {grapheme: "kwe", phonemes: [k, w, e]}
+  - {grapheme: "kwo", phonemes: [k, w, o]}
+  - {grapheme: "gwa", phonemes: [g, w, a]}
+  - {grapheme: "gwi", phonemes: [g, w, i]}
+  - {grapheme: "gwe", phonemes: [g, w, e]}
+  - {grapheme: "gwo", phonemes: [g, w, o]}
+  - {grapheme: "dya", phonemes: [dʑ, a]}
+  - {grapheme: "dyu", phonemes: [dʑ, ɯ]}
+  - {grapheme: "dyo", phonemes: [dʑ, o]}
+  - {grapheme: "dye", phonemes: [dʑ, e]}
   - {grapheme: "a_hh", phonemes: [a]}
   - {grapheme: "e_hh", phonemes: [e]}
   - {grapheme: "u_hh", phonemes: [ɯ]}
