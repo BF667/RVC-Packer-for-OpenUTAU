@@ -14,6 +14,12 @@ dist/
 
 # Test outputs
 output/
+test_native_ds/
+
+# RVC Singer Detector (closed source)
+detect_rvc.py
+detector.spec
+src/detect_gui.py
 
 # IDE / editor
 .idea/
