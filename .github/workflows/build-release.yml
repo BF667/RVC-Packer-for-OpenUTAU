@@ -6,6 +6,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
@@ -76,8 +79,29 @@ jobs:
         with:
           path: artifacts
 
+      - name: Flatten artifact files
+        run: |
+          mkdir -p release_files
+          find artifacts -type f \( -name "*.zip" -o -name "*.tar.gz" \) -exec cp {} release_files/ \;
+
+      - name: Delete existing release if present
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          RELEASE_ID=$(gh api "repos/${{ github.repository }}/releases/tags/$TAG" --jq '.id' 2>/dev/null || echo "")
+          if [ -n "$RELEASE_ID" ]; then
+            echo "Deleting existing release $RELEASE_ID for tag $TAG"
+            gh api -X DELETE "repos/${{ github.repository }}/releases/$RELEASE_ID"
+          fi
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/**/*
+          token: ${{ secrets.RELEASE_TOKEN }}
+          files: release_files/*
+          body: |
+            ## Downloads
+            - **Windows**: `RVC_VoiceBank_Packer_Windows_x86_64.zip` — Extract and run `RVC_VoiceBank_Packer.exe`
+            - **Linux**: `RVC_VoiceBank_Packer_Linux_x86_64.tar.gz` — Extract and run `./RVC_VoiceBank_Packer`
           generate_release_notes: true
