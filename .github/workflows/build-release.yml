@@ -83,16 +83,31 @@ jobs:
         run: |
           mkdir -p release_files
           find artifacts -type f \( -name "*.zip" -o -name "*.tar.gz" \) -exec cp {} release_files/ \;
+          ls -lh release_files/
 
       - name: Delete existing release if present
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
-          RELEASE_ID=$(gh api "repos/${{ github.repository }}/releases/tags/$TAG" --jq '.id' 2>/dev/null || echo "")
-          if [ -n "$RELEASE_ID" ]; then
-            echo "Deleting existing release $RELEASE_ID for tag $TAG"
-            gh api -X DELETE "repos/${{ github.repository }}/releases/$RELEASE_ID"
+          echo "Checking for existing release at tag: $TAG"
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -H "Authorization: token $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          if [ "$HTTP_CODE" = "200" ]; then
+            RELEASE_ID=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])" 2>/dev/null || echo "")
+            if [ -n "$RELEASE_ID" ]; then
+              echo "Deleting existing release ID: $RELEASE_ID"
+              curl -s -X DELETE \
+                -H "Authorization: token $GH_TOKEN" \
+                "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID"
+              echo "Deleted."
+            fi
+          else
+            echo "No existing release found (HTTP $HTTP_CODE), proceeding."
           fi
 
       - name: Create Release
