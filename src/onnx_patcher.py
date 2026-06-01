@@ -204,6 +204,11 @@ def patch_f0_silence_mask(model_path: str, output_path: Optional[str] = None):
     1. Zero F0 — prevents NSF harmonic generation
     2. Zero waveform output — catches residual noise from index retrieval
        leaking non-zero HuBERT into enc_p even when F0 is zero
+
+    Uses Resize with `scales` (not `sizes`) for opset 11-17 compatibility.
+    The voiced mask is upsampled from frame rate to audio sample rate via
+    a computed scale factor, ensuring correct temporal alignment even for
+    fast syllable transitions.
     """
     if onnx is None:
         raise ImportError("onnx package required")
@@ -219,17 +224,20 @@ def patch_f0_silence_mask(model_path: str, output_path: Optional[str] = None):
         print("  SP silence mask already present, skipping")
         return
 
+    # Silence threshold — raised slightly from 1e-6 to avoid incorrectly
+    # zeroing out low-energy consonant frames that are still voiced.
+    _SP_EPS = 1e-4
+
     for name, val in [
         ("_sp_pow2",  np.array(2.0, dtype=np.float32)),
-        ("_sp_eps",   np.array(1e-6, dtype=np.float32)),
+        ("_sp_eps",   np.array(_SP_EPS, dtype=np.float32)),
         ("_sp_one",   np.array(1.0, dtype=np.float32)),
         ("_sp_axes",  np.array([-1], dtype=np.int64)),
         ("_sp_ax1",   np.array([1], dtype=np.int64)),
         ("_sp_idx1",  np.array(1, dtype=np.int64)),
-        ("_sp_sh1",   np.array([1], dtype=np.int64)),
-        ("_sp_p11",   np.array([1, 1], dtype=np.int64)),
+        ("_sp_sh0",   np.array([0], dtype=np.int64)),
+        ("_sp_f1",    np.array(1.0, dtype=np.float32)),
         ("_sp_roi",   np.array([], dtype=np.float32)),
-        ("_sp_sc",    np.array([], dtype=np.float32)),
     ]:
         graph.initializer.append(numpy_helper.from_array(val, name=name))
 
@@ -262,23 +270,44 @@ def patch_f0_silence_mask(model_path: str, output_path: Optional[str] = None):
             if out == "waveform":
                 node.output[i] = "_sp_wav_raw"
 
-    # Upsample _sp_voiced [1,T] → [1,T_audio] via nearest resize, then mul
+    # Upsample _sp_voiced [1,T] → [1,1,T] → [1,1,T_audio] via Resize with
+    # *scales* (opset 11-17 compatible).  scale = T_audio / T_frames.
     audio_nodes = [
+        # _sp_voiced [1,T] → [1,1,T]  (add channel dim for Resize)
         helper.make_node("Unsqueeze", ["_sp_voiced", "_sp_ax1"],
                          ["_sp_v3d"]),
+        # Compute scale factor = T_audio / T_frames  (both as float)
         helper.make_node("Shape", ["_sp_wav_raw"], ["_sp_ws"]),
-        helper.make_node("Gather", ["_sp_ws", "_sp_idx1"], ["_sp_ta"]),
-        helper.make_node("Reshape", ["_sp_ta", "_sp_sh1"], ["_sp_ta1"]),
-        helper.make_node("Concat", ["_sp_p11", "_sp_ta1"], ["_sp_rsz"],
-                         axis=0),
+        helper.make_node("Gather", ["_sp_ws", "_sp_idx1"], ["_sp_ta_i"]),
+        helper.make_node("Cast", ["_sp_ta_i"], ["_sp_ta_f"],
+                         to=TensorProto.FLOAT),
+        helper.make_node("Shape", ["_sp_v3d"], ["_sp_vs"]),
+        helper.make_node("Gather", ["_sp_vs", "_sp_idx1"], ["_sp_tf_i"]),
+        helper.make_node("Cast", ["_sp_tf_i"], ["_sp_tf_f"],
+                         to=TensorProto.FLOAT),
+        # scales = [1.0, 1.0, T_audio / T_frames]
+        helper.make_node("Div", ["_sp_ta_f", "_sp_tf_f"], ["_sp_scl_f"]),
+        # Build 3-element scales tensor: [1.0, 1.0, scale]
+        # Use Concat to assemble from constants and computed scale
+        helper.make_node("Concat", ["_sp_f1", "_sp_f1", "_sp_scl_f"],
+                         ["_sp_scales"], axis=0),
+        # Resize with scales (3 inputs: X, roi, scales — opset 11-17)
         helper.make_node("Resize",
-                         ["_sp_v3d", "_sp_roi", "_sp_sc", "_sp_rsz"],
+                         ["_sp_v3d", "_sp_roi", "_sp_scales"],
                          ["_sp_va3"], mode="nearest"),
+        # [1,1,T_audio] → [1,T_audio]
         helper.make_node("Squeeze", ["_sp_va3", "_sp_ax1"], ["_sp_va"]),
         helper.make_node("Mul", ["_sp_wav_raw", "_sp_va"], ["waveform"]),
     ]
 
     graph.node.extend(audio_nodes)
+
+    # Bump opset to 18 if currently lower, so that Resize with scales
+    # and other dynamic-shape ops work reliably across runtimes.
+    if model.opset_import:
+        for op in model.opset_import:
+            if op.version < 18:
+                op.version = 18
 
     onnx.save(model, output_path)
     print("  SP silence mask injected (F0 + waveform output)")

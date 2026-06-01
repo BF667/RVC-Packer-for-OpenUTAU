@@ -18,17 +18,29 @@ from pathlib import Path
 import numpy as np
 
 try:
-    from .pth_reader import load_pth
-    from .onnx_patcher import process_state_dict, patch_onnx_template, patch_f0_silence_mask
-except ImportError:
     from pth_reader import load_pth
     from onnx_patcher import process_state_dict, patch_onnx_template, patch_f0_silence_mask
+except ImportError:
+    from .pth_reader import load_pth
+    from .onnx_patcher import process_state_dict, patch_onnx_template, patch_f0_silence_mask
 
 import sys as _sys
 if getattr(_sys, 'frozen', False):
+    # sys._MEIPASS points to the _internal directory in PyInstaller 6+
+    # or the one-file temp directory in --onefile mode.
     ADAPTER_ROOT = Path(_sys._MEIPASS)
 else:
     ADAPTER_ROOT = Path(__file__).resolve().parents[1]
+
+# Ensure ADAPTER_ROOT assets are accessible (PyInstaller 6+ _internal layout)
+_assets_dir = ADAPTER_ROOT / "assets"
+if not _assets_dir.exists() and getattr(_sys, 'frozen', False):
+    _parent_root = Path(_sys._MEIPASS).parent
+    if (_parent_root / "assets").exists():
+        ADAPTER_ROOT = _parent_root
+    elif (Path(_sys.executable).parent / "assets").exists():
+        ADAPTER_ROOT = Path(_sys.executable).parent
+
 ASSETS_DIR = ADAPTER_ROOT / "assets"
 TEMPLATES_DIR = ASSETS_DIR / "templates"
 PHONEME_DIR = ADAPTER_ROOT / "phoneme_map"
@@ -188,9 +200,9 @@ def pack_voicebank(
     if index_npy_path and Path(index_npy_path).exists():
         log("Baking index vectors...")
         try:
-            from .onnx_patcher import bake_index_into_onnx
-        except ImportError:
             from onnx_patcher import bake_index_into_onnx
+        except ImportError:
+            from .onnx_patcher import bake_index_into_onnx
         bake_index_into_onnx(str(vocoder_onnx), index_npy_path,
                               index_rate, str(vocoder_onnx))
 

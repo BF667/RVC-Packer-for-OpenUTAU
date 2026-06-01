@@ -13,9 +13,23 @@ import threading
 
 # PyInstaller puts data in _internal/, normal run uses parent dir
 if getattr(sys, 'frozen', False):
+    # sys._MEIPASS points to the _internal directory in PyInstaller 6+
+    # or the one-file temp directory in --onefile mode.
     ADAPTER_ROOT = Path(sys._MEIPASS)
 else:
     ADAPTER_ROOT = Path(__file__).resolve().parents[1]
+
+# Ensure ADAPTER_ROOT assets are accessible (PyInstaller 6+ _internal layout)
+_assets_dir = ADAPTER_ROOT / "assets"
+if not _assets_dir.exists() and getattr(sys, 'frozen', False):
+    # Fallback: try parent of _MEIPASS (some PyInstaller configurations)
+    _parent_root = Path(sys._MEIPASS).parent
+    if (_parent_root / "assets").exists():
+        ADAPTER_ROOT = _parent_root
+    elif (Path(sys.executable).parent / "assets").exists():
+        # Last resort: look next to the exe (for directory-mode builds
+        # where _internal is a subdirectory of the exe's folder)
+        ADAPTER_ROOT = Path(sys.executable).parent
 
 # ── i18n ───────────────────────────────────────────────────────────────────
 
@@ -585,9 +599,9 @@ class PackerGUI:
             avatar_file = avatar
 
         try:
-            from src.pack_voicebank import pack_voicebank
-        except ImportError:
             from pack_voicebank import pack_voicebank
+        except ImportError:
+            from src.pack_voicebank import pack_voicebank
 
         pack_voicebank(
             rvc_pth_path=rvc_path,

@@ -108,7 +108,8 @@ class RVCVocoderOnnx(nn.Module):
         # upsample 50fps -> 100fps
         feat = mel.transpose(1, 2)                             # [1, 768, T_50]
         feat_2x = F.interpolate(feat, scale_factor=2.0,
-                                mode="nearest")                # [1, 768, T_100]
+                                mode="linear",
+                                align_corners=False)           # [1, 768, T_100]
         feat_2x = feat_2x.transpose(1, 2)                     # [1, T_100, 768]
 
         f0_2x = F.interpolate(f0.unsqueeze(1), scale_factor=2.0,
@@ -155,16 +156,16 @@ class FixedLenVocoder(nn.Module):
         self.resample_ratio = self.OPENUTAU_SR / model_sr
 
     def forward(self, mel, f0):
-        # Zero F0 for silent frames (SP padding from acoustic model outputs
-        # all-zero HuBERT; without this, NSF generates a voiced "ah" artifact)
-        silent = (mel.pow(2).sum(dim=-1) < 1e-6).float()
-        f0 = f0 * (1.0 - silent)
+        # Note: F0 silence masking is handled by patch_f0_silence_mask() at
+        # ONNX level after export.  We no longer duplicate it here, avoiding
+        # redundant double-masking and ensuring a single consistent threshold.
 
         mel = self.voc._index_retrieve(mel)
 
         feat = mel.transpose(1, 2)
         feat_2x = F.interpolate(feat, scale_factor=2.0,
-                                mode="nearest")
+                                mode="linear",
+                                align_corners=False)
         feat_2x = feat_2x.transpose(1, 2)
 
         f0_2x = F.interpolate(f0.unsqueeze(1), scale_factor=2.0,
