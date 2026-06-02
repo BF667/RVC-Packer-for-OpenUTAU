@@ -25,8 +25,31 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true
+
+      - name: Download LFS assets from upstream
+        shell: bash
+        run: |
+          # The fork may not have LFS storage, so download ONNX files from upstream
+          UPSTREAM="https://github.com/SaigyoYuyuko/RVC-Packer-for-OpenUTAU/raw/main"
+          for f in \
+            assets/templates/v2_40k.onnx \
+            assets/templates/v2_48k.onnx \
+            assets/acoustic.onnx \
+            assets/dsdur/dur.onnx \
+            assets/dsdur/linguistic.onnx; do
+            echo "Downloading $f ..."
+            curl -L -o "$f" "$UPSTREAM/$f" 2>&1 | tail -1
+          done
+          echo "Verifying ONNX files..."
+          python3 -c "
+          import struct
+          for f in ['assets/templates/v2_40k.onnx', 'assets/templates/v2_48k.onnx', 'assets/acoustic.onnx']:
+              with open(f, 'rb') as fh:
+                  magic = fh.read(4)
+                  size = fh.seek(0, 2)
+                  ok = magic != b'vers' and size > 1000
+                  print(f'  {f}: {size//1024//1024}MB, valid={ok}')
+          "
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
