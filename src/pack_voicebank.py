@@ -19,10 +19,14 @@ import numpy as np
 
 try:
     from pth_reader import load_pth
-    from onnx_patcher import process_state_dict, patch_onnx_template, patch_f0_silence_mask
+    from onnx_patcher import (process_state_dict, patch_onnx_template,
+                               patch_f0_silence_mask, fix_reduce_l2_nodes,
+                               zero_nsf_weights)
 except ImportError:
     from .pth_reader import load_pth
-    from .onnx_patcher import process_state_dict, patch_onnx_template, patch_f0_silence_mask
+    from .onnx_patcher import (process_state_dict, patch_onnx_template,
+                                patch_f0_silence_mask, fix_reduce_l2_nodes,
+                                zero_nsf_weights)
 
 import sys as _sys
 if getattr(_sys, 'frozen', False):
@@ -252,6 +256,16 @@ def pack_voicebank(
     # 4b. Inject F0 silence mask into vocoder graph
     log("Injecting F0 silence mask...")
     patch_f0_silence_mask(str(vocoder_onnx), has_f0=rvc_info["f0"])
+
+    # 4c. Fix ReduceL2 nodes for Microsoft.ML.OnnxRuntime compatibility
+    log("Fixing ONNX compatibility (ReduceL2)...")
+    fix_reduce_l2_nodes(str(vocoder_onnx))
+
+    # 4d. For f0=0 / pure HiFi-GAN models, zero out NSF source weights
+    # so the decoder behaves as a plain HiFi-GAN Generator
+    if not rvc_info["f0"]:
+        log("Zeroing NSF weights for HiFi-GAN model...")
+        zero_nsf_weights(str(vocoder_onnx))
 
     # 5. Write vocoder config
     _write_vocoder_yaml(vocoder_onnx.parent, sr)

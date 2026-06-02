@@ -68,7 +68,10 @@ class RVCVocoderOnnx(nn.Module):
             return feats
 
         f = feats[0]                                         # [T, 768]
-        f_norm = F.normalize(f, p=2, dim=-1)                 # [T, 768]
+        # Manual L2 norm instead of F.normalize — avoids ONNX ReduceL2 op
+        # which has compatibility issues with Microsoft.ML.OnnxRuntime
+        # (axes attribute vs input mismatch across opset versions)
+        f_norm = f / f.pow(2).sum(dim=-1, keepdim=True).sqrt().clamp(min=1e-12)  # [T, 768]
         sim = f_norm @ self.big_npy_norm.t()                 # [T, N_idx]
 
         topk_sim, topk_idx = sim.topk(8, dim=-1)             # [T, 8]

@@ -161,6 +161,152 @@ def patch_onnx_template(template_path: str, state_dict: dict,
     return patched
 
 
+def fix_reduce_l2_nodes(model_path: str, output_path: Optional[str] = None):
+    """Replace ReduceL2 ops with Pow+ReduceSum+Sqrt for runtime compatibility.
+
+    ReduceL2 with 'axes' attribute is rejected by Microsoft.ML.OnnxRuntime
+    (used by OpenUTAU) because at opset 13+ axes should be an input, not an
+    attribute.  PyTorch's ONNX exporter sometimes generates ReduceL2 with
+    axes as attribute even at opset 17.  Replacing with equivalent
+    Pow+ReduceSum+Sqrt avoids this issue entirely.
+    """
+    if onnx is None:
+        raise ImportError("onnx package required")
+    from onnx import helper
+
+    if output_path is None:
+        output_path = model_path
+
+    model = onnx.load(model_path)
+    graph = model.graph
+
+    nodes_to_remove = []
+    new_nodes = []
+    new_initializers = []
+    fix_count = 0
+
+    for node in graph.node:
+        if node.op_type != "ReduceL2":
+            continue
+
+        # Extract axes from attribute (old-style) or input (opset 13+)
+        axes_val = None
+        keepdims = 1
+        for attr in node.attribute:
+            if attr.name == "axes":
+                axes_val = list(attr.ints)
+            elif attr.name == "keepdims":
+                keepdims = attr.i
+
+        input_name = node.input[0]
+        output_name = node.output[0]
+
+        # Unique suffix for intermediate tensors
+        suffix = f"_rl2fix_{fix_count}"
+        pow_out = f"_rl2_pow{suffix}"
+        sum_out = f"_rl2_sum{suffix}"
+        sqrt_out = f"_rl2_sqrt{suffix}"
+        const_2_name = f"_rl2_two{suffix}"
+
+        # Constant 2.0 for Pow
+        new_initializers.append(
+            numpy_helper.from_array(
+                np.array(2.0, dtype=np.float32), name=const_2_name))
+
+        # Axes as input for ReduceSum
+        if axes_val is not None:
+            axes_name = f"_rl2_axes{suffix}"
+            new_initializers.append(
+                numpy_helper.from_array(
+                    np.array(axes_val, dtype=np.int64), name=axes_name))
+        elif len(node.input) > 1 and node.input[1]:
+            axes_name = node.input[1]
+        else:
+            axes_name = None
+
+        # Pow(input, 2)
+        new_nodes.append(helper.make_node(
+            "Pow", [input_name, const_2_name], [pow_out]))
+
+        # ReduceSum(pow_out, axes, keepdims)
+        if axes_name is not None:
+            new_nodes.append(helper.make_node(
+                "ReduceSum", [pow_out, axes_name], [sum_out],
+                keepdims=keepdims))
+        else:
+            new_nodes.append(helper.make_node(
+                "ReduceSum", [pow_out], [sum_out],
+                keepdims=keepdims))
+
+        # Sqrt(sum_out)
+        new_nodes.append(helper.make_node(
+            "Sqrt", [sum_out], [sqrt_out]))
+
+        # Redirect all consumers of ReduceL2 output to Sqrt output
+        for other in graph.node:
+            for i, inp in enumerate(other.input):
+                if inp == output_name:
+                    other.input[i] = sqrt_out
+
+        # Fix graph outputs too
+        for out in graph.output:
+            if out.name == output_name:
+                out.name = sqrt_out
+
+        nodes_to_remove.append(node)
+        fix_count += 1
+
+    if fix_count == 0:
+        return  # Nothing to fix, don't re-save
+
+    # Remove old ReduceL2 nodes
+    for node in nodes_to_remove:
+        graph.node.remove(node)
+
+    # Add new initializers and nodes
+    for init in new_initializers:
+        graph.initializer.append(init)
+    for node in new_nodes:
+        graph.node.append(node)
+
+    onnx.save(model, output_path)
+    print(f"  Fixed {fix_count} ReduceL2 node(s) → Pow+ReduceSum+Sqrt")
+
+
+def zero_nsf_weights(model_path: str, output_path: Optional[str] = None):
+    """Zero out NSF source module weights for f0=0 / HiFi-GAN-only models.
+
+    When a pure HiFi-GAN model (f0=0) is packed using a standard template
+    (which includes NSF/GeneratorNSF source nodes), the m_source and
+    noise_convs weights won't have real values from the checkpoint.
+    Zeroing them ensures the NSF path produces zero output, effectively
+    making the decoder behave as a plain HiFi-GAN Generator.
+    """
+    if onnx is None:
+        raise ImportError("onnx package required")
+
+    if output_path is None:
+        output_path = model_path
+
+    model = onnx.load(model_path)
+    zeroed = 0
+    # Match both bare (dec.m_source.*) and wrapped (voc.net_g.dec.m_source.*) names
+    nsf_patterns = ("dec.m_source.", "dec.noise_convs.", "dec.noise_res.")
+
+    for init in model.graph.initializer:
+        if any(p in init.name for p in nsf_patterns):
+            arr = numpy_helper.to_array(init)
+            zeros = np.zeros_like(arr)
+            init.CopyFrom(numpy_helper.from_array(zeros, name=init.name))
+            zeroed += 1
+
+    onnx.save(model, output_path)
+    if zeroed:
+        print(f"  Zeroed {zeroed} NSF weight(s) for f0=0 / HiFi-GAN model")
+    else:
+        print(f"  No NSF weights found (model may already be f0=0 template)")
+
+
 def bake_index_into_onnx(model_path: str, npy_path: str, index_rate: float,
                          output_path: str):
     """Replace index vectors in an ONNX model (exported with index support).
@@ -312,13 +458,6 @@ def patch_f0_silence_mask(model_path: str, output_path: Optional[str] = None,
     ]
 
     graph.node.extend(audio_nodes)
-
-    # Bump opset to 18 if currently lower, so that Resize with scales
-    # and other dynamic-shape ops work reliably across runtimes.
-    if model.opset_import:
-        for op in model.opset_import:
-            if op.version < 18:
-                op.version = 18
 
     onnx.save(model, output_path)
     layers = "F0 + waveform" if has_f0 else "waveform only (no F0)"
