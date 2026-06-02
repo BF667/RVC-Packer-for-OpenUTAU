@@ -41,11 +41,12 @@ class RVCVocoderOnnx(nn.Module):
     F0_MAX_HZ = 1100.0
 
     def __init__(self, net_g_onnx, big_npy=None, index_rate=0.75,
-                 sample_rate=40000):
+                 sample_rate=40000, has_f0=True):
         super().__init__()
         self.net_g = net_g_onnx
         self.index_rate = index_rate
         self.sample_rate = sample_rate
+        self.has_f0 = has_f0
 
         if big_npy is not None:
             npy = big_npy.astype(np.float32)
@@ -100,7 +101,7 @@ class RVCVocoderOnnx(nn.Module):
     def forward(self, mel: torch.Tensor, f0: torch.Tensor) -> torch.Tensor:
         """
         mel: [1, T_50fps, 768]  HuBERT features from S2H at 50fps
-        f0:  [1, T_50fps]       F0 in Hz at 50fps
+        f0:  [1, T_50fps]       F0 in Hz at 50fps (ignored for f0=0 models)
         Returns: waveform [1, T_audio]
         """
         mel = self._index_retrieve(mel)
@@ -112,20 +113,21 @@ class RVCVocoderOnnx(nn.Module):
                                 align_corners=False)           # [1, 768, T_100]
         feat_2x = feat_2x.transpose(1, 2)                     # [1, T_100, 768]
 
-        f0_2x = F.interpolate(f0.unsqueeze(1), scale_factor=2.0,
-                               mode="linear",
-                               align_corners=False).squeeze(1) # [1, T_100]
-
         T_100 = feat_2x.shape[1]
-
-        pitch = self._f0_to_coarse(f0_2x)                     # [1, T_100]
-
         p_len = torch.tensor([T_100], dtype=torch.int64)
         sid = torch.zeros(1, dtype=torch.int64)
 
-        audio = self.net_g(feat_2x, p_len, pitch, f0_2x, sid)
-        # audio: [1, 1, T_audio]
+        if self.has_f0:
+            f0_2x = F.interpolate(f0.unsqueeze(1), scale_factor=2.0,
+                                   mode="linear",
+                                   align_corners=False).squeeze(1) # [1, T_100]
+            pitch = self._f0_to_coarse(f0_2x)                     # [1, T_100]
+            audio = self.net_g(feat_2x, p_len, pitch, f0_2x, sid)
+        else:
+            # f0=0 / pure HiFi-GAN: no pitch conditioning
+            audio = self.net_g(feat_2x, p_len, sid)
 
+        # audio: [1, 1, T_audio]
         if audio.dim() == 3:
             audio = audio.squeeze(1)
 
@@ -149,11 +151,12 @@ class FixedLenVocoder(nn.Module):
 
     OPENUTAU_SR = 44100
 
-    def __init__(self, voc, max_t, model_sr):
+    def __init__(self, voc, max_t, model_sr, has_f0=True):
         super().__init__()
         self.voc = voc
         self.max_t = max_t
         self.resample_ratio = self.OPENUTAU_SR / model_sr
+        self.has_f0 = has_f0
 
     def forward(self, mel, f0):
         # Note: F0 silence masking is handled by patch_f0_silence_mask() at
@@ -168,16 +171,19 @@ class FixedLenVocoder(nn.Module):
                                 align_corners=False)
         feat_2x = feat_2x.transpose(1, 2)
 
-        f0_2x = F.interpolate(f0.unsqueeze(1), scale_factor=2.0,
-                               mode="linear",
-                               align_corners=False).squeeze(1)
-
-        pitch = self.voc._f0_to_coarse(f0_2x)
-
         p_len = torch.tensor([10000], dtype=torch.int64)
         sid = torch.zeros(1, dtype=torch.int64)
 
-        audio = self.voc.net_g(feat_2x, p_len, pitch, f0_2x, sid)
+        if self.has_f0:
+            f0_2x = F.interpolate(f0.unsqueeze(1), scale_factor=2.0,
+                                   mode="linear",
+                                   align_corners=False).squeeze(1)
+            pitch = self.voc._f0_to_coarse(f0_2x)
+            audio = self.voc.net_g(feat_2x, p_len, pitch, f0_2x, sid)
+        else:
+            # f0=0 / pure HiFi-GAN: no pitch conditioning
+            audio = self.voc.net_g(feat_2x, p_len, sid)
+
         if audio.dim() == 3:
             audio = audio.squeeze(1)
 
@@ -194,21 +200,33 @@ class FixedLenVocoder(nn.Module):
 # Export logic
 # ---------------------------------------------------------------------------
 
-def _patch_net_g_infer(net_g):
+def _patch_net_g_infer(net_g, has_f0=True):
     """Monkey-patch net_g.forward to replicate infer() for ONNX export.
 
     Uses torch.randn_like for noise (exports as ONNX RandomNormalLike,
     dynamic shape). Matches RVC infer() exactly: noise_scale=0.66666.
-    """
 
-    def patched_forward(phone, phone_lengths, pitch, nsff0, sid,
-                        max_len=None):
-        g = net_g.emb_g(sid.unsqueeze(0)).transpose(1, 2)
-        m_p, logs_p, x_mask = net_g.enc_p(phone, pitch, phone_lengths)
-        z_p = (m_p + torch.exp(logs_p) * torch.randn_like(m_p) * 0.66666) * x_mask
-        z = net_g.flow(z_p, x_mask, g=g, reverse=True)
-        o = net_g.dec(z * x_mask, nsff0, g=g)
-        return o
+    For f0=0 (pure HiFi-GAN) models, the decoder receives no pitch/F0
+    input — it is a plain Generator rather than GeneratorNSF.
+    """
+    if has_f0:
+        def patched_forward(phone, phone_lengths, pitch, nsff0, sid,
+                            max_len=None):
+            g = net_g.emb_g(sid.unsqueeze(0)).transpose(1, 2)
+            m_p, logs_p, x_mask = net_g.enc_p(phone, pitch, phone_lengths)
+            z_p = (m_p + torch.exp(logs_p) * torch.randn_like(m_p) * 0.66666) * x_mask
+            z = net_g.flow(z_p, x_mask, g=g, reverse=True)
+            o = net_g.dec(z * x_mask, nsff0, g=g)
+            return o
+    else:
+        def patched_forward(phone, phone_lengths, sid,
+                            max_len=None):
+            g = net_g.emb_g(sid.unsqueeze(0)).transpose(1, 2)
+            m_p, logs_p, x_mask = net_g.enc_p(phone, None, phone_lengths)
+            z_p = (m_p + torch.exp(logs_p) * torch.randn_like(m_p) * 0.66666) * x_mask
+            z = net_g.flow(z_p, x_mask, g=g, reverse=True)
+            o = net_g.dec(z * x_mask, g=g)
+            return o
 
     net_g.forward = patched_forward
 
@@ -237,12 +255,15 @@ def _load_config_json(model_path: str):
 
 
 def load_rvc_model(model_path: str, device: str = "cpu"):
-    """Load RVC model and return (net_g_onnx, config_dict)."""
+    """Load RVC model and return (net_g_onnx, config_dict).
+
+    Automatically selects the correct model class based on f0 support:
+    - f0=1: SynthesizerTrnMs768NSFsid (NSF + HiFi-GAN decoder)
+    - f0=0: SynthesizerTrnMs768NSFsid_nono (pure HiFi-GAN decoder)
+    """
     rvc_root = Path(os.environ.get("RVC_ROOT", "RVC"))
     sys.path.insert(0, str(rvc_root))
     sys.path.insert(0, str(rvc_root / "infer" / "lib"))
-
-    from infer_pack.models import SynthesizerTrnMs768NSFsid as SynthesizerTrnMsNSFsidM
 
     ckpt = torch.load(model_path, map_location=device, weights_only=False)
     config = ckpt.get("config", None)
@@ -257,7 +278,22 @@ def load_rvc_model(model_path: str, device: str = "cpu"):
             raise ValueError("No config in checkpoint and no config.json found")
         version = ckpt.get("version", "v2")
 
-    net_g = SynthesizerTrnMsNSFsidM(
+    # Detect f0 support from checkpoint metadata
+    if_f0 = ckpt.get("f0", 1)
+
+    try:
+        if if_f0:
+            from infer_pack.models import SynthesizerTrnMs768NSFsid as SynthClass
+        else:
+            from infer_pack.models import SynthesizerTrnMs768NSFsid_nono as SynthClass
+    except ImportError:
+        # Fallback: try the unified ONNX model class
+        try:
+            from infer_pack.models_onnx import SynthesizerTrnMsNSFsidM as SynthClass
+        except ImportError:
+            from infer_pack.models import SynthesizerTrnMs768NSFsid as SynthClass
+
+    net_g = SynthClass(
         *config[:-1] if ckpt.get("config") else config,
         sr=sr,
         version=version,
@@ -276,7 +312,7 @@ def load_rvc_model(model_path: str, device: str = "cpu"):
     net_g.remove_weight_norm()
     net_g.eval()
 
-    return net_g, {"sample_rate": sr, "version": version}
+    return net_g, {"sample_rate": sr, "version": version, "f0": bool(if_f0)}
 
 
 def load_index(index_path: str):
@@ -305,15 +341,20 @@ def export_onnx(rvc_model, output_path: str, big_npy=None,
     """
     from attn_patch import patch_attention_for_onnx
 
-    _patch_net_g_infer(rvc_model)
+    # Detect f0 from model info (default True for backward compat)
+    has_f0 = info.get("f0", True)
+
+    _patch_net_g_infer(rvc_model, has_f0=has_f0)
     patch_attention_for_onnx(rvc_model)
 
     wrapper = RVCVocoderOnnx(rvc_model, big_npy=big_npy,
                               index_rate=index_rate,
-                              sample_rate=sample_rate)
+                              sample_rate=sample_rate,
+                              has_f0=has_f0)
     wrapper.eval()
 
-    traceable = FixedLenVocoder(wrapper, max_frames, model_sr=sample_rate)
+    traceable = FixedLenVocoder(wrapper, max_frames, model_sr=sample_rate,
+                                has_f0=has_f0)
     traceable.eval()
 
     T = max_frames + 10

@@ -49,8 +49,14 @@ PHONEME_DIR = ADAPTER_ROOT / "phoneme_map"
 _SR_MAP = {"32k": 32000, "40k": 40000, "48k": 48000}
 
 
-def detect_rvc_config(full_ckpt: dict) -> dict:
-    """Extract RVC model configuration from checkpoint metadata."""
+def detect_rvc_config(full_ckpt: dict, state_dict: dict = None) -> dict:
+    """Extract RVC model configuration from checkpoint metadata.
+
+    Also detects f0=0 (pure HiFi-GAN) models by inspecting weight keys
+    when metadata is ambiguous.  f0=1 models use GeneratorNSF (NSF+HiFi-GAN
+    decoder with m_source and noise_convs); f0=0 models use Generator
+    (pure HiFi-GAN decoder, no pitch conditioning).
+    """
     config = full_ckpt.get("config", [])
     version = full_ckpt.get("version", "v2")
 
@@ -61,30 +67,66 @@ def detect_rvc_config(full_ckpt: dict) -> dict:
     else:
         sr = int(sr_raw)
 
-    # f0 support
-    f0 = full_ckpt.get("f0", 1)
+    # f0 support: check metadata first, then fall back to weight keys
+    f0 = full_ckpt.get("f0", None)
+    if f0 is None and state_dict is not None:
+        # Detect from weight keys: NSF models have m_source / noise_convs
+        has_nsf = any(k.startswith("dec.m_source.") for k in state_dict)
+        has_noise_convs = any(k.startswith("dec.noise_convs.") for k in state_dict)
+        has_emb_pitch = "enc_p.emb_pitch.weight" in state_dict
+        f0 = 1 if (has_nsf or has_noise_convs or has_emb_pitch) else 0
+    elif f0 is None:
+        f0 = 1  # default assumption
+
+    # Detect version from weight keys if not in metadata
+    if state_dict is not None and version not in ("v1", "v2"):
+        emb_phone = state_dict.get("enc_p.emb_phone.weight")
+        if emb_phone is not None and hasattr(emb_phone, 'shape'):
+            in_dim = emb_phone.shape[1] if len(emb_phone.shape) == 2 else emb_phone.shape[-1]
+            version = "v1" if in_dim < 768 else "v2"
+
+    decoder_type = "GeneratorNSF" if f0 else "Generator"
 
     return {
         "version": version,
         "sample_rate": sr,
         "f0": bool(f0),
         "config": config,
+        "decoder_type": decoder_type,
     }
 
 
 def select_template(rvc_info: dict) -> Path:
-    """Select the correct ONNX template for this RVC config."""
+    """Select the correct ONNX template for this RVC config.
+
+    f0=1 models (GeneratorNSF/NSF-HiFiGAN) use the standard templates.
+    f0=0 models (Generator/pure HiFi-GAN) use '_nono' templates which
+    have no NSF source module or noise_convs in the decoder graph.
+    """
     v = rvc_info["version"]
     sr = rvc_info["sample_rate"]
+    f0 = rvc_info.get("f0", True)
     sr_tag = {32000: "32k", 40000: "40k", 48000: "48k"}.get(sr, f"{sr}")
-    name = f"{v}_{sr_tag}.onnx"
+
+    # f0=0 (HiFi-GAN only) models need _nono templates
+    suffix = "" if f0 else "_nono"
+    name = f"{v}_{sr_tag}{suffix}.onnx"
     path = TEMPLATES_DIR / name
-    if not path.exists():
-        avail = [f.name for f in TEMPLATES_DIR.glob("*.onnx")] if TEMPLATES_DIR.exists() else []
-        raise FileNotFoundError(
-            f"No ONNX template for {v}/{sr_tag}. "
-            f"Available: {avail or 'none — run dev/create_templates.py first'}")
-    return path
+    if path.exists():
+        return path
+
+    # Fallback: if _nono template doesn't exist, try the standard template.
+    # The ONNX patcher will simply skip missing initializers (m_source, noise_convs)
+    # and the silence mask layer 1 (F0 masking) will be skipped for f0=0 models.
+    if not f0:
+        fallback = TEMPLATES_DIR / f"{v}_{sr_tag}.onnx"
+        if fallback.exists():
+            return fallback
+
+    avail = [f.name for f in TEMPLATES_DIR.glob("*.onnx")] if TEMPLATES_DIR.exists() else []
+    raise FileNotFoundError(
+        f"No ONNX template for {v}/{sr_tag}/f0={int(f0)}. "
+        f"Available: {avail or 'none — run dev/create_templates.py first'}")
 
 
 def _write_character_txt(out: Path, name: str, author: str, avatar: str):
@@ -174,9 +216,10 @@ def pack_voicebank(
     # 1. Read .pth
     log("Reading RVC model...")
     state, full_ckpt = load_pth(rvc_pth_path)
-    rvc_info = detect_rvc_config(full_ckpt)
+    rvc_info = detect_rvc_config(full_ckpt, state_dict=state)
     sr = rvc_info["sample_rate"]
-    log(f"  Detected: {rvc_info['version']}, {sr}Hz, f0={rvc_info['f0']}")
+    log(f"  Detected: {rvc_info['version']}, {sr}Hz, f0={rvc_info['f0']}, "
+        f"decoder={rvc_info.get('decoder_type', 'GeneratorNSF')}")
 
     # 2. Process weights (merge weight_norm, fp32)
     log("Processing weights...")
@@ -208,7 +251,7 @@ def pack_voicebank(
 
     # 4b. Inject F0 silence mask into vocoder graph
     log("Injecting F0 silence mask...")
-    patch_f0_silence_mask(str(vocoder_onnx))
+    patch_f0_silence_mask(str(vocoder_onnx), has_f0=rvc_info["f0"])
 
     # 5. Write vocoder config
     _write_vocoder_yaml(vocoder_onnx.parent, sr)

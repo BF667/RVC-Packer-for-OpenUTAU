@@ -197,13 +197,18 @@ def bake_index_into_onnx(model_path: str, npy_path: str, index_rate: float,
     print(f"  Baked index ({big_npy.shape[0]} vectors, rate={index_rate})")
 
 
-def patch_f0_silence_mask(model_path: str, output_path: Optional[str] = None):
+def patch_f0_silence_mask(model_path: str, output_path: Optional[str] = None,
+                          has_f0: bool = True):
     """Insert SP silence handling into vocoder ONNX graph.
 
     Two layers of protection for SP (silence padding) frames:
-    1. Zero F0 — prevents NSF harmonic generation
+    1. Zero F0 — prevents NSF harmonic generation (only for f0=1 / GeneratorNSF models)
     2. Zero waveform output — catches residual noise from index retrieval
        leaking non-zero HuBERT into enc_p even when F0 is zero
+
+    For f0=0 (pure HiFi-GAN / Generator) models, layer 1 is skipped since
+    there is no F0 input to mask.  Layer 2 (waveform masking) is always
+    applied because the acoustic model can still produce silent SP frames.
 
     Uses Resize with `scales` (not `sizes`) for opset 11-17 compatibility.
     The voiced mask is upsampled from frame rate to audio sample rate via
@@ -241,7 +246,7 @@ def patch_f0_silence_mask(model_path: str, output_path: Optional[str] = None):
     ]:
         graph.initializer.append(numpy_helper.from_array(val, name=name))
 
-    # -- Layer 1: F0 masking --
+    # Compute voiced mask from mel energy (used by both layers)
     f0_nodes = [
         helper.make_node("Pow", ["mel", "_sp_pow2"], ["_sp_mel_sq"]),
         helper.make_node("ReduceSum", ["_sp_mel_sq", "_sp_axes"],
@@ -252,13 +257,19 @@ def patch_f0_silence_mask(model_path: str, output_path: Optional[str] = None):
                          to=TensorProto.FLOAT),
         helper.make_node("Sub", ["_sp_one", "_sp_silent_f"],
                          ["_sp_voiced"]),
-        helper.make_node("Mul", ["f0", "_sp_voiced"], ["_sp_f0_masked"]),
     ]
 
-    for node in graph.node:
-        for i, inp in enumerate(node.input):
-            if inp == "f0":
-                node.input[i] = "_sp_f0_masked"
+    # -- Layer 1: F0 masking (only for f0=1 / GeneratorNSF models) --
+    if has_f0:
+        f0_nodes.append(
+            helper.make_node("Mul", ["f0", "_sp_voiced"], ["_sp_f0_masked"]))
+
+        for node in graph.node:
+            for i, inp in enumerate(node.input):
+                if inp == "f0":
+                    node.input[i] = "_sp_f0_masked"
+    else:
+        print("  F0 masking skipped (f0=0 / pure HiFi-GAN model)")
 
     for i, node in enumerate(f0_nodes):
         graph.node.insert(i, node)
@@ -310,4 +321,5 @@ def patch_f0_silence_mask(model_path: str, output_path: Optional[str] = None):
                 op.version = 18
 
     onnx.save(model, output_path)
-    print("  SP silence mask injected (F0 + waveform output)")
+    layers = "F0 + waveform" if has_f0 else "waveform only (no F0)"
+    print(f"  SP silence mask injected ({layers})")
